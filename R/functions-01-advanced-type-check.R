@@ -2,43 +2,74 @@ library("here")
 library("rlang")
 library("palmerpenguins")
 
-# designed for package use
+# function without type checking
+to_z <- function(x, middle = 1) {
+  trim = (1 - middle)/2
+  (x - mean(x, na.rm = TRUE, trim = trim)) / sd(x, na.rm = TRUE)
+}
+
+# will throw error, but could be clearer
+to_z(penguins$bill_length_mm, middle = "1")
+
+
+# -----------
+# use type-checking functions from {rlang}
+
+# bring checking functions into environment
 source(here("R/import-standalone-obj-type.R"), local = TRUE)
 source(here("R/import-standalone-types-check.R"), local = TRUE)
 
+# check `middle`
+to_z_check <- function(x, middle = 1) {
 
-# motivation seems to be to check arguments to functions,
-# rather than types within a data frame
+  check_number_decimal(middle)
 
-check_string("a")
+  trim = (1 - middle)/2
+  (x - mean(x, na.rm = TRUE, trim = trim)) / sd(x, na.rm = TRUE)
+}
 
-check_string(c("hello", "world"))
-check_character(c("hello", "world"))
+# error is clearer here
+to_z_check(penguins$bill_length_mm, middle = "1")
 
 
-is.numeric(penguins$bill_length_mm)
+# -----------
+# make your own type-checking function
 
-check_data_frame(mtcars)
+# simplified attempt
+check_numeric <- function(x, allow_null = FALSE) {
 
-# To get this to work in a package:
-# - `usethis::use_standalone("r-lib/rlang", file = "types-check")`
-# - `use_package_doc()`  space to import rlang namespace
-# - in <name>-package.R insert `#' @import rlang`
-# - document and check
-#
-# Be aware that you have the entire namespace of {rlang},
-# as well as the functions in the imported files.
-#
-# At some point, it is imagined that these will be available as functions
-# exported from an "r-lib" package.
+  # predicate
+  if (!missing(x)) {
+    if (is.numeric(x)) return(invisible(NULL))
+    if (allow_null && is_null(x)) return(invisible(NULL))
+  }
 
-# in the standalone files, there is no check_numeric
-# roll your own, adapt `check_logical()`
-check_numeric <- function(x,
-                          ...,
-                          allow_null = FALSE,
-                          arg = caller_arg(x),
-                          call = caller_env()) {
+  # stop
+  stop_input_type(x, "a numeric vector")
+}
+
+# use simplified checker
+to_z_check_even_more <- function(x, middle = 1) {
+
+  check_numeric(x) # this is "our" function, not a "standard" checker
+  check_number_decimal(middle)
+
+  trim = (1 - middle)/2
+  (x - mean(x, na.rm = TRUE, trim = trim)) / sd(x, na.rm = TRUE)
+}
+
+to_z_check_even_more(penguins$sex, middle = 1)
+
+
+# -----------
+# more detail
+
+# this is what a "full" checker might look like
+check_numeric_full <- function(x,
+                               ...,
+                               allow_null = FALSE,
+                               arg = caller_arg(x),
+                               call = caller_env()) {
 
   # predicate
   if (!missing(x)) {
@@ -62,12 +93,15 @@ check_numeric <- function(x,
   )
 }
 
-to_z <- function(x, middle = 1) {
+# use full checker in function
+to_z_full <- function(x, middle = 1) {
   # validate inputs
-  check_numeric(x)
+  check_numeric_full(x)
   check_number_decimal(middle)
 
   trim = (1 - middle)/2
   (x - mean(x, na.rm = TRUE, trim = trim)) / sd(x, na.rm = TRUE)
 }
 
+# try it out
+to_z_full(penguins$sex, middle = 1)
